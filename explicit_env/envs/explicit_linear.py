@@ -6,17 +6,21 @@ import numpy as np
 
 
 from gym import spaces
-from explicit_env.envs.explicit import IExplicitEnv
+from explicit_env.envs.explicit import IExplicitEnv, ExplicitEnvGetters
 from explicit_env.envs.utils import compute_parents_children
 
 
-class ExplicitLinearEnv(gym.Env, interface.implements(IExplicitEnv)):
+class ExplicitLinearEnv(
+    gym.Env, interface.implements(IExplicitEnv), ExplicitEnvGetters
+):
     """Example Linear MDP from my thesis, chapter 2"""
 
     def __init__(self):
         """C-tor"""
         self.observation_space = spaces.Discrete(4)
+        self._states = np.arange(self.observation_space.n)
         self.action_space = spaces.Discrete(1)
+        self._actions = np.arange(self.action_space.n)
         self._p0s = np.zeros(self.observation_space.n)
         self._p0s[0] = 1
         self._t_mat = np.zeros(
@@ -39,61 +43,6 @@ class ExplicitLinearEnv(gym.Env, interface.implements(IExplicitEnv)):
         self._parents, self._children = compute_parents_children(
             self._t_mat, self._terminal_state_mask
         )
-
-    @property
-    def states(self):
-        """State space iterable"""
-        return np.arange(self.observation_space.n)
-
-    @property
-    def actions(self):
-        """Action space iterable"""
-        return np.arange(self.action_space.n)
-
-    @property
-    def t_mat(self):
-        """Transition dynamics"""
-        return self._t_mat
-
-    @property
-    def p0s(self):
-        """Starting state distribution"""
-        return self._p0s
-
-    @property
-    def terminal_state_mask(self):
-        """Vector indicating terminal states"""
-        return self._terminal_state_mask
-
-    @property
-    def parents(self):
-        """Dict mapping states to (s, a) parents"""
-        return self._parents
-
-    @property
-    def children(self):
-        """Dict mapping states to (a, s') children"""
-        return self._children
-
-    @property
-    def gamma(self):
-        """Discount factor"""
-        return self._gamma
-
-    @property
-    def state_rewards(self):
-        """Linear state reward weights"""
-        return self._state_rewards
-
-    @property
-    def state_action_rewards(self):
-        """Linear state-action reward weights"""
-        return self._state_action_rewards
-
-    @property
-    def state_action_state_rewards(self):
-        """Linear state-action-state reward weights"""
-        return self._state_action_state_rewards
 
     def reset(self):
         self.state = np.random.choice(list(range(self.observation_space.n)), p=self.p0s)

@@ -28,6 +28,7 @@ register;
 import gym
 from explicit_env import *
 env = gym.make("ExplicitFrozenLakeEnv-v0")
+print(env.t_mat)        # Print explicit s, a, s' transition matrix for FrozenLake4x4 
 ```
 
  * [`FrozenLakeEnv`](https://gym.openai.com/envs/FrozenLake-v0/) -> [`ExplicitFrozenLakeEnv`](envs/explicit_frozen_lake.py)
@@ -60,11 +61,12 @@ To convert this to an ExplicitEnv, you would make the following changes;
 
 ```python
 import gym
+import interface
 import numpy as np
 from explicit_env.envs import IExplicitEnv, ExplicitEnvGetters
 
 
-class MyCustomEnv(gym.Env, IExplicitEnv, ExplicitEnvGetters):
+class MyCustomEnv(gym.Env, interface.implements(IExplicitEnv), ExplicitEnvGetters):
     
     def __init_(self):
         # Do construction stuff etc.
