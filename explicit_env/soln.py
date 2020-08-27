@@ -485,3 +485,39 @@ class OptimalPolicy(EpsilonGreedyPolicy):
             p[a_star] = 1.0
         return p
 
+
+class BoltzmannExplorationPolicy(Policy):
+    """A Boltzmann exploration policy wrt. a provided Q function
+    
+    Provides a .predict(s) method to match the stable-baselines policy API
+    """
+
+    def __init__(self, q, scale=1.0):
+        """C-tor
+        
+        Args:
+            q (numpy array): |S|x|A| Q-matrix
+            scale (float): Temperature scaling factor on the range [0, inf).
+                Actions are chosen proportional to exp(scale * Q(s, a)), so...
+                 * Scale > 1.0 will exploit optimal actions more often
+                 * Scale < 1.0 will explore sub-optimal actions more often
+                 * Scale == 0.0 will uniformly sample actions
+                 * Scale < 0.0 will prefer non-optimal actions
+        """
+        self.q = q
+        self.scale = scale
+
+    def prob_for_state(self, s):
+        """Get the action probability vector for the given state
+        
+        Args:
+            s (int): Current state
+        
+        Returns:
+            (numpy array): Probability distribution over actions, respecting the
+                self.stochastic and self.epsilon parameters
+        """
+        # Prepare action probability vector
+        p = np.exp(self.scale * self.q[s])
+        p /= np.sum(p)
+        return p
