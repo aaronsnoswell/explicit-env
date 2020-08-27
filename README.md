@@ -4,7 +4,7 @@ A more rigorous OpenAI Gym
 [`Env`](https://github.com/openai/gym/blob/master/gym/core.py) interface for MDPs with
 discrete and explicit dynamics.
 
-Using the `IExplicitEnv' interface, discrete state and action MDPs are easier to work
+Using the `IExplicitEnv` interface, discrete state and action MDPs are easier to work
 with.
 
 ## Installation
