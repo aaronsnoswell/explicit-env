@@ -233,67 +233,6 @@ def q_from_v(v_star, env):
     )
 
 
-class EpsilonGreedyPolicy:
-    """An Epsilon Greedy Policy wrt. a provided Q function
-    
-    Provides a .predict(s) method to match the stable-baselines policy API
-    """
-
-    def __init__(self, q, epsilon=0.0):
-        """C-tor
-        
-        Args:
-            q (numpy array): |S|x|A| Q-matrix
-            epsilon (float): Probability of taking a random action
-        """
-        self.q = q
-        self.epsilon = epsilon
-        self.optimal_action_map = {s: np.argmax(q[s]) for s in range(q.shape[0])}
-
-    def save(self, path):
-        """Save policy to file"""
-        with open(path, "wb") as file:
-            pickle.dump(self, file)
-
-    @staticmethod
-    def load(path):
-        """Load policy from file"""
-        with open(path, "rb") as file:
-            _self = pickle.load(file)
-            return _self
-
-    def prob_for_state(self, s):
-        """Get the epsilon greedy action probability vector for a given state"""
-        p = np.ones(self.q.shape[1]) * (self.epsilon) / self.q.shape[1]
-        p[self.optimal_action_map[s]] += 1 - self.epsilon
-        return p
-
-    def predict(self, s, stochastic=False):
-        """Predict next action and distribution over states"""
-        action = None
-
-        if stochastic:
-            if self.epsilon == 0.0:
-                # Pick any action that is as good as the best action
-                action_values = self.q[s]
-                print(action_values)
-                best_action_value = np.max(action_values)
-                best_action_mask = action_values == best_action_value
-                best_actions = np.where(best_action_mask)[0]
-                action = np.random.choice(best_actions)
-            else:
-                # Pick an action in a Boltzmann-optimal fashion
-                # (proportional to the exponent of their reward)
-                action = np.random.choice(
-                    np.arange(self.q.shape[1]), p=self.prob_for_state[s]
-                )
-        else:
-            # Pick the first action
-            action = self.optimal_action_map[s]
-
-        return action, None
-
-
 @jit(nopython=True)
 def _nb_policy_evaluation(
     t_mat,
@@ -394,3 +333,155 @@ def policy_evaluation(env, policy, eps=1e-6, num_runs=1):
             )
         )
     return np.mean(policy_state_values, axis=0)
+
+
+class Policy:
+    """A simple Policy base class
+    
+    Provides a .predict(s) method to match the stable-baselines policy API
+    """
+
+    def __init__(self):
+        """C-tor"""
+        raise NotImplementedError
+
+    def save(self, path):
+        """Save policy to file"""
+        with open(path, "wb") as file:
+            pickle.dump(self, file)
+
+    @staticmethod
+    def load(path):
+        """Load policy from file"""
+        with open(path, "rb") as file:
+            _self = pickle.load(file)
+            return _self
+
+    def predict(self, s):
+        """Predict next action and distribution over states
+        
+        N.b. This function matches the API of the stabe-baselines policies.
+        
+        Args:
+            s (int): Current state
+        
+        Returns:
+            (int): Sampled action
+            (None): Placeholder to ensure this function matches the stable-baselines
+                policy interface. Some policies use this argument to return a prediction
+                over future state distributions - we do not.
+        """
+        action = np.random.choice(np.arange(self.q.shape[1]), p=self.prob_for_state(s))
+        return action, None
+
+    def path_log_likelihood(self, p):
+        """Compute log-likelihood of [(s, a), ..., (s, None)] path under this policy
+        
+        Args:
+            p (list): List of state-action tuples
+        
+        Returns:
+            (float): Absolute log-likelihood of the path under this policy
+        """
+
+        # We start with 1.0 probability, and log(1.0) = 0.0
+        ll = 0.0
+
+        # N.b. - final tuple is (s, None), which we skip
+        for s, a in p[:-1]:
+            log_action_prob = np.log(self.prob_for_state(s)[a])
+            if np.isneginf(log_action_prob):
+                return -np.inf
+            ll += log_action_prob
+
+        return log_action_prob
+
+    def prob_for_state(self, s):
+        """Get the action probability vector for the given state
+        
+        Args:
+            s (int): Current state
+        
+        Returns:
+            (numpy array): Probability distribution over actions
+        """
+        raise NotImplementedError
+
+
+class EpsilonGreedyPolicy(Policy):
+    """An Epsilon Greedy Policy wrt. a provided Q function
+    
+    Provides a .predict(s) method to match the stable-baselines policy API
+    """
+
+    def __init__(self, q, epsilon=0.1):
+        """C-tor
+        
+        Args:
+            q (numpy array): |S|x|A| Q-matrix
+            epsilon (float): Probability of taking a random action. Set to 0 to create
+                an optimal stochsatic policy. Specifically,
+                    Epsilon == 0.0 will make the policy sample between equally good
+                        (== Q value) actions. If a single action has the highest Q
+                        value, that action will always be chosen
+                    Epsilon > 0.0 will make the policy act in an epsilon greedy
+                        fashion - i.e. a random action is chosen with probability
+                        epsilon, and an optimal action is chosen with probability
+                        (1 - epsilon) + (epsilon / |A|).
+        """
+        self.q = q
+        self.epsilon = epsilon
+
+    def prob_for_state(self, s):
+        """Get the action probability vector for the given state
+        
+        Args:
+            s (int): Current state
+        
+        Returns:
+            (numpy array): Probability distribution over actions, respecting the
+                self.stochastic and self.epsilon parameters
+        """
+
+        # Get a list of the optimal actions
+        action_values = self.q[s]
+        best_action_value = np.max(action_values)
+        best_action_mask = action_values == best_action_value
+        best_actions = np.where(best_action_mask)[0]
+
+        # Prepare action probability vector
+        p = np.zeros(self.q.shape[1])
+
+        # All actions share probability epsilon
+        p[:] += self.epsilon / self.q.shape[1]
+
+        # Optimal actions share additional probability (1 - epsilon)
+        p[best_actions] += (1 - self.epsilon) / len(best_actions)
+
+        return p
+
+
+class OptimalPolicy(EpsilonGreedyPolicy):
+    """An optimal policy - can be deterministic or stochastic"""
+
+    def __init__(self, q, stochastic=True):
+        """C-tor
+        
+        Args:
+            q (numpy array): |S|x|A| Q-matrix
+            stochastic (bool): If true, this policy will sample amongst optimal actions.
+                Otherwise, the first optimal action will always be chosen.
+        """
+        super().__init__(q, epsilon=0.0)
+
+        self.stochastic = stochastic
+
+    def prob_for_state(self, s):
+        p = super().prob_for_state(s)
+        if not self.stochastic:
+            # Always select the first optimal action
+            a_star = np.where(p != 0)[0][0]
+            p *= 0
+            p[a_star] = 1.0
+        return p
+
