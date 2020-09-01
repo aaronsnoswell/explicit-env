@@ -313,14 +313,11 @@ def policy_evaluation(env, policy, eps=1e-6, num_runs=1):
     if _state_action_state_rewards is None:
         _state_action_state_rewards = np.zeros(env.t_mat.shape)
 
-    print("Num urns is: ", num_runs)
-
     policy_state_values = []
     for _ in range(num_runs):
         actions = np.array(
             [policy.predict(s)[0] for s in env.states]
         )
-        print(actions)
         policy_state_values.append(
             _nb_policy_evaluation(
                 env.t_mat,
