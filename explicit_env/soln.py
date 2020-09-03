@@ -382,17 +382,29 @@ class Policy:
             (float): Absolute log-likelihood of the path under this policy
         """
 
-        # We start with 1.0 probability, and log(1.0) = 0.0
-        ll = 0.0
+        # We start with probability 1.0
+        ll = np.log(1.0)
 
         # N.b. - final tuple is (s, None), which we skip
         for s, a in p[:-1]:
-            log_action_prob = np.log(self.prob_for_state(s)[a])
+            log_action_prob = self.log_prob_for_state(s)[a]
             if np.isneginf(log_action_prob):
                 return -np.inf
+
             ll += log_action_prob
 
-        return log_action_prob
+        return ll
+
+    def log_prob_for_state(self, s):
+        """Get the action log probability vector for the given state
+        
+        Args:
+            s (int): Current state
+        
+        Returns:
+            (numpy array): Log probability distribution over actions
+        """
+        raise NotImplementedError
 
     def prob_for_state(self, s):
         """Get the action probability vector for the given state
@@ -403,7 +415,7 @@ class Policy:
         Returns:
             (numpy array): Probability distribution over actions
         """
-        raise NotImplementedError
+        return np.exp(self.log_prob_for_state(s))
 
 
 class EpsilonGreedyPolicy(Policy):
@@ -458,6 +470,17 @@ class EpsilonGreedyPolicy(Policy):
 
         return p
 
+    def log_prob_for_state(self, s):
+        """Get the action log probability vector for the given state
+        
+        Args:
+            s (int): Current state
+        
+        Returns:
+            (numpy array): Log probability distribution over actions
+        """
+        return np.log(self.prob_for_state(s))
+
 
 class OptimalPolicy(EpsilonGreedyPolicy):
     """An optimal policy - can be deterministic or stochastic"""
@@ -483,6 +506,17 @@ class OptimalPolicy(EpsilonGreedyPolicy):
             p[a_star] = 1.0
         return p
 
+    def log_prob_for_state(self, s):
+        """Get the action log probability vector for the given state
+        
+        Args:
+            s (int): Current state
+        
+        Returns:
+            (numpy array): Log probability distribution over actions
+        """
+        return np.log(self.prob_for_state())
+
 
 class BoltzmannExplorationPolicy(Policy):
     """A Boltzmann exploration policy wrt. a provided Q function
@@ -507,6 +541,12 @@ class BoltzmannExplorationPolicy(Policy):
         self.q = q
         self.scale = scale
 
+    def log_prob_for_state(self, s):
+        log_prob = self.scale * self.q[s]
+        total_log_prob = np.log(np.sum(np.exp(log_prob)))
+        log_prob -= total_log_prob
+        return log_prob
+
     def prob_for_state(self, s):
         """Get the action probability vector for the given state
         
@@ -517,7 +557,8 @@ class BoltzmannExplorationPolicy(Policy):
             (numpy array): Probability distribution over actions, respecting the
                 self.stochastic and self.epsilon parameters
         """
-        # Prepare action probability vector
-        p = np.exp(self.scale * self.q[s])
-        p /= np.sum(p)
-        return p
+        # # Prepare action probability vector
+        # p = np.exp(self.scale * self.q[s])
+        # p /= np.sum(p)
+        # return p
+        return np.exp(self.log_prob_for_state(s))
