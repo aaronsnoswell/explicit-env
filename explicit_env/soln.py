@@ -315,9 +315,7 @@ def policy_evaluation(env, policy, eps=1e-6, num_runs=1):
 
     policy_state_values = []
     for _ in range(num_runs):
-        actions = np.array(
-            [policy.predict(s)[0] for s in env.states]
-        )
+        actions = np.array([policy.predict(s)[0] for s in env.states])
         policy_state_values.append(
             _nb_policy_evaluation(
                 env.t_mat,
@@ -373,6 +371,9 @@ class Policy:
 
     def path_log_likelihood(self, p):
         """Compute log-likelihood of [(s, a), ..., (s, None)] path under this policy
+        
+        N.B. - this does NOT account for the likelihood of starting at state s1 under
+            the MDP dynamics, or the MDP dynamics themselves
         
         Args:
             p (list): List of state-action tuples
