@@ -497,6 +497,8 @@ class BoltzmannExplorationPolicy(Policy):
             scale (float): Temperature scaling factor on the range [0, inf).
                 Actions are chosen proportional to exp(scale * Q(s, a)), so...
                  * Scale > 1.0 will exploit optimal actions more often
+                 * Scale == 1.0 samples actions proportional to the exponent of their
+                    value
                  * Scale < 1.0 will explore sub-optimal actions more often
                  * Scale == 0.0 will uniformly sample actions
                  * Scale < 0.0 will prefer non-optimal actions
