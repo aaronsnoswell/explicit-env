@@ -79,7 +79,7 @@ def q_value_iteration(env, eps=1e-6, verbose=False, max_iter=None):
 def _nb_q_value_iteration(
     t_mat, gamma, rs, rsa, rsas, eps=1e-6, verbose=False, max_iter=None
 ):
-    """Value iteration to find the optimal value function
+    """Value iteration to find the optimal state-action value function
     
     Args:
         t_mat (numpy array): |S|x|A|x|S| transition matrix
