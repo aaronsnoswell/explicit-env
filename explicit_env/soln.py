@@ -9,77 +9,6 @@ import itertools as it
 from numba import jit
 
 
-def nonb_value_iteration(env, eps=1e-6, verbose=False, max_iter=None):
-    """Value iteration to find the optimal value function
-    
-    Args:
-        env (.envs.explicit.IExplicitEnv) Explicit Gym environment
-        
-        eps (float): Value convergence tolerance
-        verbose (bool): Extra logging
-        max_iter (int): If provided, iteration will terminate regardless of convergence
-            after this many iterations.
-    
-    Returns:
-        (numpy array): |S| vector of state values
-    """
-
-    if env.gamma == 1.0:
-        warnings.warn(
-            "Environment discount factor is 1.0 - value iteration will only converge if all paths terminate in a finite number of steps"
-        )
-
-    value_fn = np.zeros(env.t_mat.shape[0])
-
-    # Prepare linear reward arrays
-    _state_rewards = env.state_rewards
-    if _state_rewards is None:
-        _state_rewards = np.zeros(env.t_mat.shape[0])
-    _state_action_rewards = env.state_action_rewards
-    if _state_action_rewards is None:
-        _state_action_rewards = np.zeros(env.t_mat.shape[0 : 1 + 1])
-    _state_action_state_rewards = env.state_action_state_rewards
-    if _state_action_state_rewards is None:
-        _state_action_state_rewards = np.zeros(env.t_mat.shape)
-
-    for _iter in it.count():
-        delta = 0
-        for s1 in env.states:
-            v = value_fn[s1]
-            value_fn[s1] = np.max(
-                [
-                    np.sum(
-                        [
-                            env.t_mat[s1, a, s2]
-                            * (
-                                _state_action_rewards[s1, a]
-                                + _state_action_state_rewards[s1, a, s2]
-                                + _state_rewards[s2]
-                                + env.gamma * value_fn[s2]
-                            )
-                            for s2 in env.states
-                        ]
-                    )
-                    for a in env.actions
-                ]
-            )
-            delta = max(delta, np.abs(v - value_fn[s1]))
-
-        if max_iter is not None and _iter >= max_iter:
-            if verbose:
-                print("Terminating before convergence at {} iterations".format(_iter))
-                break
-
-        # Check value function convergence
-        if delta < eps:
-            break
-        else:
-            if verbose:
-                print("Value Iteration #{}, delta={}".format(_iter, delta))
-
-    return value_fn
-
-
 def value_iteration(env, eps=1e-6, verbose=False, max_iter=None):
     """Value iteration to find the optimal value function
     
@@ -114,6 +43,96 @@ def value_iteration(env, eps=1e-6, verbose=False, max_iter=None):
     )
 
 
+def q_value_iteration(env, eps=1e-6, verbose=False, max_iter=None):
+    """Value iteration to find the optimal state-action value function
+    
+    Args:
+        env (.envs.explicit.IExplicitEnv) Explicit Gym environment
+        
+        eps (float): Value convergence tolerance
+        verbose (bool): Extra logging
+        max_iter (int): If provided, iteration will terminate regardless of convergence
+            after this many iterations.
+    
+    Returns:
+        (numpy array): |S|x|A| matrix of state-action values
+    """
+
+    rs = env.state_rewards
+    if rs is None:
+        rs = np.zeros(env.t_mat.shape[0], dtype=np.float)
+
+    rsa = env.state_action_rewards
+    if rsa is None:
+        rsa = np.zeros(env.t_mat.shape[0:2], dtype=np.float)
+
+    rsas = env.state_action_state_rewards
+    if rsas is None:
+        rsas = np.zeros(env.t_mat.shape[0:3], dtype=np.float)
+
+    return _nb_q_value_iteration(
+        env.t_mat, env.gamma, rs, rsa, rsas, eps=eps, verbose=verbose, max_iter=max_iter
+    )
+
+
+@jit(nopython=True)
+def _nb_q_value_iteration(
+    t_mat, gamma, rs, rsa, rsas, eps=1e-6, verbose=False, max_iter=None
+):
+    """Value iteration to find the optimal value function
+    
+    Args:
+        t_mat (numpy array): |S|x|A|x|S| transition matrix
+        gamma (float): Discount factor
+        rs (numpy array): |S| State reward vector
+        rsa (numpy array): |S|x|A| State-action reward vector
+        rsas (numpy array): |S|x|A|x|S| State-action-state reward vector
+        
+        eps (float): Value convergence tolerance
+        verbose (bool): Extra logging
+        max_iter (int): If provided, iteration will terminate regardless of convergence
+            after this many iterations.
+    
+    Returns:
+        (numpy array): |S|x|A| matrix of state-action values
+    """
+
+    q_value_fn = np.zeros((t_mat.shape[0], t_mat.shape[1]))
+
+    _iter = 0
+    while True:
+        delta = 0
+        for s1 in range(t_mat.shape[0]):
+            for a in range(t_mat.shape[1]):
+                q = q_value_fn[s1, a]
+                state_values = np.zeros(t_mat.shape[0])
+                for s2 in range(t_mat.shape[2]):
+                    state_values[s2] += t_mat[s1, a, s2] * (
+                        rs[s1]
+                        + rsa[s1, a]
+                        + rsas[s1, a, s2]
+                        + gamma * np.max(q_value_fn[s2, :])
+                    )
+                q_value_fn[s1, a] = np.sum(state_values)
+                delta = max(delta, np.abs(q - q_value_fn[s1, a]))
+
+        if max_iter is not None and _iter >= max_iter:
+            if verbose:
+                print("Terminating before convergence, # iterations = ", _iter)
+                break
+
+        # Check value function convergence
+        if delta < eps:
+            break
+        else:
+            if verbose:
+                print("Value Iteration #", _iter, " delta=", delta)
+
+        _iter += 1
+
+    return q_value_fn
+
+
 @jit(nopython=True)
 def _nb_value_iteration(
     t_mat, gamma, rs, rsa, rsas, eps=1e-6, verbose=False, max_iter=None
@@ -121,6 +140,12 @@ def _nb_value_iteration(
     """Value iteration to find the optimal value function
     
     Args:
+        t_mat (numpy array): |S|x|A|x|S| transition matrix
+        gamma (float): Discount factor
+        rs (numpy array): |S| State reward vector
+        rsa (numpy array): |S|x|A| State-action reward vector
+        rsas (numpy array): |S|x|A|x|S| State-action-state reward vector
+        
         eps (float): Value convergence tolerance
         verbose (bool): Extra logging
         max_iter (int): If provided, iteration will terminate regardless of convergence
