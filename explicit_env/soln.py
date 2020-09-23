@@ -442,6 +442,34 @@ class Policy:
         """
         return np.exp(self.log_prob_for_state(s))
 
+    def get_rollouts(self, env, num, max_path_length=None):
+        """Sample state-action rollouts from this policy in the provided environment
+        
+        Args:
+            env (gym.Env): Environment
+            num (int): Number of rollouts to sample
+            
+            max_path_length (int): Optional maximum path length - episodes will be
+                prematurely terminated after this many time steps
+        
+        Returns:
+            (list): List of state-action rollouts
+        """
+        rollouts = []
+        for _ in range(num):
+            rollout = []
+            s = env.reset()
+            for t in it.count():
+                a, _ = self.predict(s)
+                s2, r, done, info = env.step(a)
+                rollout.append((s, a))
+                s = s2
+                if done or (max_path_length is not None and t == max_path_length - 2):
+                    break
+            rollout.append((s, None))
+            rollouts.append(rollout)
+        return rollouts
+
 
 class EpsilonGreedyPolicy(Policy):
     """An Epsilon Greedy Policy wrt. a provided Q function
