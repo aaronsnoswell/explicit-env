@@ -442,6 +442,18 @@ class Policy:
         """
         return np.exp(self.log_prob_for_state(s))
 
+    def prob_for_state_action(self, s, a):
+        """Get the probability for the given state, action
+        
+        Args:
+            s (int): Current state
+            a (int): Chosen action
+        
+        Returns:
+            (float): Probability of choosing a from s
+        """
+        return self.prob_for_state(s)[a]
+
     def get_rollouts(self, env, num, max_path_length=None):
         """Sample state-action rollouts from this policy in the provided environment
         
