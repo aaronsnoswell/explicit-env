@@ -550,20 +550,40 @@ class EpsilonGreedyPolicy(Policy):
 class OptimalPolicy(EpsilonGreedyPolicy):
     """An optimal policy - can be deterministic or stochastic"""
 
-    def __init__(self, q, stochastic=True):
+    def __init__(self, q, stochastic=True, q_precision=None):
         """C-tor
         
         Args:
             q (numpy array): |S|x|A| Q-matrix
+            
             stochastic (bool): If true, this policy will sample amongst optimal actions.
                 Otherwise, the first optimal action will always be chosen.
+            q_precision (int): Precision level in digits of the q-function. If a
+                stochastic optimal policy is requested, Q-values will be rounded to
+                this many digits before equality checks. Set to None to disable.
         """
         super().__init__(q, epsilon=0.0)
 
         self.stochastic = stochastic
+        self.q_precision = q_precision
 
     def prob_for_state(self, s):
-        p = super().prob_for_state(s)
+        if self.stochastic:
+
+            if self.q_precision is None:
+                p = super().prob_for_state(s)
+            else:
+                # Apply q_precision rounding to the q-function
+                action_values = np.array(
+                    [round(v, self.q_precision) for v in self.q[s]]
+                )
+                best_action_value = np.max(action_values)
+                best_action_mask = action_values == best_action_value
+                best_actions = np.where(best_action_mask)[0]
+
+                p = np.zeros(self.q.shape[1])
+                p[best_actions] += 1.0 / len(best_actions)
+
         if not self.stochastic:
             # Always select the first optimal action
             a_star = np.where(p != 0)[0][0]
