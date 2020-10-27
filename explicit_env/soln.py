@@ -586,6 +586,7 @@ class OptimalPolicy(EpsilonGreedyPolicy):
 
         if not self.stochastic:
             # Always select the first optimal action
+            p = super().prob_for_state(s)
             a_star = np.where(p != 0)[0][0]
             p *= 0
             p[a_star] = 1.0
