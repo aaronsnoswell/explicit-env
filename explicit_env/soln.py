@@ -648,3 +648,29 @@ class BoltzmannExplorationPolicy(Policy):
         # p /= np.sum(p)
         # return p
         return np.exp(self.log_prob_for_state(s))
+
+
+def main():
+    """Main function"""
+
+    # Test functionality
+    from explicit_env.envs.explicit_frozen_lake import ExplicitFrozenLakeEnv
+
+    env = ExplicitFrozenLakeEnv()
+    env._gamma = 0.99
+    print(env.reward_range)
+
+    v_fn = value_iteration(env, eps=1e-9)
+    print(v_fn.reshape(4, 4))
+
+    q_fn_v = q_from_v(v_fn, env)
+    print(q_fn_v)
+
+    q_fn = q_value_iteration(env, eps=1e-9, verbose=True)
+    print(q_fn)
+
+    print(np.abs(q_fn_v - q_fn))
+
+
+if __name__ == "__main__":
+    main()
